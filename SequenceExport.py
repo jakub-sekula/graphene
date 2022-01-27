@@ -28,10 +28,12 @@ import ctypes
 import mil as MIL
 from datetime import datetime
 import contextlib
+import shutil
 
 # Get correct .dcf config file for the camera
 DCF_FILENAME = "[WORKING CONFIG] MV2-D1280-640-CL-8_1280x1024_8Taps8bitCon.dcf"
 DCF_PATH = os.path.join(os.getcwd(),"configs", DCF_FILENAME)
+TEMP_PATH = "G:\\"
 IMAGES_PATH = os.path.join(os.getcwd(), "images")
 VIDEOS_PATH = os.path.join(os.getcwd(), "videos")
 
@@ -70,14 +72,8 @@ class HookDataStruct(ctypes.Structure):
 
 # Number of images in the buffering grab queue.
 # Generally, increasing this number gives a better real-time grab.
-BUFFERING_SIZE_MAX = 100
+BUFFERING_SIZE_MAX = 500
 
-# User's processing function called every time a grab buffer is ready.
-# --------------------------------------------------------------------
-
-# Local defines. 
-STRING_POS_X       = 20 
-STRING_POS_Y       = 20 
 
 def ArchiveFunction(HookType, HookId, HookDataPtr):
       
@@ -92,20 +88,20 @@ def ArchiveFunction(HookType, HookId, HookDataPtr):
    UserData.NbGrabbedFrames += 1
 
    if(UserData.SaveSequenceToDisk):
-      MIL.MbufExportSequence(os.path.join(VIDEOS_PATH, filename_video), MIL.M_DEFAULT, ctypes.byref(ModifiedImage),
+      MIL.MbufExportSequence(os.path.join(TEMP_PATH, filename_video), MIL.M_DEFAULT, ctypes.byref(ModifiedImage),
                              1,MIL.M_DEFAULT,MIL.M_WRITE)
 
       UserData.NbArchivedFrames += 1
 
    #Copy the new grabbed image to the display
-   # MIL.MbufCopy(ModifiedImage, UserData.MilImageDisp)
+   #MIL.MbufCopy(ModifiedImage, UserData.MilImageDisp)
    
    return 0
 
 # Main function.
 # ---------------
 
-def MdigProcessExample():
+def SequenceExport():
    # Allocate defaults.
    SaveSequenceToDisk = MIL.MIL_ID(SAVE_SEQUENCE_TO_DISK)
    MilCompressedImage = MIL.MIL_ID(MIL.M_NULL)
@@ -133,22 +129,19 @@ def MdigProcessExample():
    print("\nSEQUENCE ACQUISITION SCRIPT")
    print("-----------------------------\n")
    print(f"Using configuration file from:\n{DCF_PATH}\n")
-
-   
    
    # Halt continuous grab. 
    get_input("Press <Enter> to start capture.\n")
 
+   # Generate filenames for image and video files
    global filename_video, filename_image 
    filename = generate_filename("")
-   filename_video = filename+".avi"
-   filename_image = filename+".png"
+   filename_video = "Video-"+filename+".avi"
+   filename_image = "Image-"+filename+".png"
 
-   save_path = os.path.join(os.getcwd(), "images")
-
-   with change_directory(save_path):
-      MIL.MdigHalt(MilDigitizer)
-      MIL.MbufExport(f"{filename}.png", MIL.M_PNG, MilImageDisp)
+   # Save static image
+   MIL.MdigHalt(MilDigitizer)
+   MIL.MbufExport(os.path.join(IMAGES_PATH,filename_image), MIL.M_PNG, MilImageDisp)
 
    # Allocate the grab buffers and clear them.
    MilGrabBufferList = (MIL.MIL_ID * BUFFERING_SIZE_MAX)()
@@ -165,7 +158,7 @@ def MdigProcessExample():
 
    if(SaveSequenceToDisk.value):
       print(f"Saving sequence to file {filename_video}\n")
-      MIL.MbufExportSequence(os.path.join(VIDEOS_PATH, filename_video), MIL.M_AVI_DIB, MIL.M_NULL,
+      MIL.MbufExportSequence(os.path.join(TEMP_PATH, filename_video), MIL.M_AVI_DIB, MIL.M_NULL,
                              MIL.M_NULL, MIL.M_DEFAULT, MIL.M_OPEN);
 
    # Initialize the user's processing function data structure.
@@ -192,11 +185,14 @@ def MdigProcessExample():
    MIL.MdigInquire(MilDigitizer, MIL.M_PROCESS_FRAME_MISSED, ctypes.byref(FrameMissed));
 
    print(f"{FrameCount.value} frames saved ({FrameMissed.value} missed), at {FrameRate.value:.2f} fps\n")
-   print(f"Image file saved to {os.path.join(IMAGES_PATH, filename_image)}")
-   print(f"Video file saved to {os.path.join(VIDEOS_PATH, filename_video)}\n")
+   
 
    if(SaveSequenceToDisk.value):
-      MIL.MbufExportSequence(os.path.join(VIDEOS_PATH, filename_video), MIL.M_DEFAULT, MIL.M_NULL, MIL.M_NULL, FrameRate, MIL.M_CLOSE);
+      MIL.MbufExportSequence(os.path.join(TEMP_PATH, filename_video), MIL.M_DEFAULT, MIL.M_NULL, MIL.M_NULL, FrameRate, MIL.M_CLOSE);
+      shutil.move(os.path.join(TEMP_PATH, filename_video), os.path.join(VIDEOS_PATH, filename_video))
+
+   print(f"Image file saved to {os.path.join(IMAGES_PATH, filename_image)}")
+   print(f"Video file saved to {os.path.join(VIDEOS_PATH, filename_video)}\n")
 
    # Free the grab buffers.
    for id in range(0, MilGrabBufferListSize):
@@ -222,6 +218,7 @@ def change_directory(path):
     os.chdir(path)
     yield
     os.chdir(prev_cwd)
+
    
 if __name__ == "__main__":
-   MdigProcessExample()
+   SequenceExport()
