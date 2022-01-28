@@ -1,56 +1,21 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-##########################################################################
-#
-# 
-#  File name: MdigProcess.py  
-#
-#   Synopsis:  This program shows the use of the MdigProcess() function and its multiple
-#              buffering acquisition to do robust real-time processing.           
-#  
-#              The user's processing code to execute is located in a callback function 
-#              that will be called for each frame acquired (see ProcessingFunction()).
-#    
-#        Note: The average processing time must be shorter than the grab time or some
-#              frames will be missed. Also, if the processing results are not displayed
-#              and the frame count is not drawn or printed, the CPU usage is reduced 
-#              significantly.
-#
-#  Copyright (C) Matrox Electronic Systems Ltd., 1992-2020.
-#  All Rights Reserved
-
-# Supporting the print function prototype from 3.0
 from __future__ import print_function
 
 import sys
 import os
 import ctypes
 import mil as MIL
-from datetime import datetime
 import contextlib
 import shutil
+import myutils
 
-# Get correct .dcf config file for the camera
+# Config and filesystem path settings
 DCF_FILENAME = "[WORKING CONFIG] MV2-D1280-640-CL-8_1280x1024_8Taps8bitCon.dcf"
 DCF_PATH = os.path.join(os.getcwd(),"configs", DCF_FILENAME)
-TEMP_PATH = "G:\\"
+TEMP_PATH = "D:\\"
 IMAGES_PATH = os.path.join(os.getcwd(), "images")
 VIDEOS_PATH = os.path.join(os.getcwd(), "videos")
-
-def generate_filename(file_extension):
-   time = datetime.now ().strftime ("%H-%M-%S")
-   
-   if file_extension != "":
-      fname = f"Capture-{time}.{str(file_extension)}"
-      return fname
-
-   return f"Capture-{time}"
-
-# Text input function differs from 2.7 to 3.0. 
-if sys.hexversion >= 0x03000000:
-    get_input = input
-else:
-    get_input = raw_input
+global filename_video, filename_image
 
 
 #Annotation flag. Set to M_YES to draw the frame number in the saved image. */
@@ -59,20 +24,19 @@ FRAME_NUMBER_ANNOTATION = MIL.M_YES
 #Archive flag. Set to M_NO to disable AVI Import/Export to disk. */
 SAVE_SEQUENCE_TO_DISK = MIL.M_YES
 
+# Number of images in the buffering grab queue.
+# Generally, increasing this number gives a better real-time grab.
+BUFFERING_SIZE_MAX = 500
+
 # User's processing function hook data structure.
 class HookDataStruct(ctypes.Structure):
    _fields_ = [
       ("MilSystem", MIL.MIL_ID),
       ("MilDisplay", MIL.MIL_ID),
       ("MilImageDisp", MIL.MIL_ID),
-      ("MilCompressedImage", MIL.MIL_INT),
       ("SaveSequenceToDisk", MIL.MIL_INT),
       ("NbGrabbedFrames", MIL.MIL_INT),
       ("NbArchivedFrames", MIL.MIL_INT)]
-
-# Number of images in the buffering grab queue.
-# Generally, increasing this number gives a better real-time grab.
-BUFFERING_SIZE_MAX = 500
 
 
 def ArchiveFunction(HookType, HookId, HookDataPtr):
@@ -99,12 +63,10 @@ def ArchiveFunction(HookType, HookId, HookDataPtr):
    return 0
 
 # Main function.
-# ---------------
+def sequence_export():
 
-def SequenceExport():
    # Allocate defaults.
    SaveSequenceToDisk = MIL.MIL_ID(SAVE_SEQUENCE_TO_DISK)
-   MilCompressedImage = MIL.MIL_ID(MIL.M_NULL)
    MilGrabImages = []
    NbFrames, n = MIL.MIL_INT(0), MIL.MIL_INT(0)
    FrameCount, FrameMissed, NbFramesReplayed, Exit = MIL.MIL_INT(0), MIL.MIL_INT(0), MIL.MIL_INT(0), MIL.MIL_INT(0)
@@ -125,28 +87,28 @@ def SequenceExport():
 
    # Grab continuously on the display and wait for a key press
    MIL.MdigGrabContinuous(MilDigitizer, MilImageDisp)  
-   # Print a message.
+   
+
    print("\nSEQUENCE ACQUISITION SCRIPT")
    print("-----------------------------\n")
    print(f"Using configuration file from:\n{DCF_PATH}\n")
    
-   # Halt continuous grab. 
-   get_input("Press <Enter> to start capture.\n")
+   
+   input("Press <Enter> to start capture.\n")
 
    # Generate filenames for image and video files
-   global filename_video, filename_image 
-   filename = generate_filename("")
-   filename_video = "Video-"+filename+".avi"
-   filename_image = "Image-"+filename+".png"
+   filename = myutils.generate_filename("")
+   filename_video = "Video"+filename+".avi"
+   filename_image = "Image"+filename+".png"
 
-   # Save static image
+   # Halt continuous grab and save static image
    MIL.MdigHalt(MilDigitizer)
    MIL.MbufExport(os.path.join(IMAGES_PATH,filename_image), MIL.M_PNG, MilImageDisp)
 
    # Allocate the grab buffers and clear them.
    MilGrabBufferList = (MIL.MIL_ID * BUFFERING_SIZE_MAX)()
    MilGrabBufferListSize = 0
-   MIL.MappControl(MIL.M_DEFAULT, MIL.M_ERROR, MIL.M_PRINT_DISABLE)
+   # MIL.MappControl(MIL.M_DEFAULT, MIL.M_ERROR, MIL.M_PRINT_DISABLE)
    for n in range(0, BUFFERING_SIZE_MAX):
       MilGrabBufferList[n] = (MIL.MbufAlloc2d(MilSystem, SizeX, SizeY, 8 + MIL.M_UNSIGNED, MIL.M_IMAGE + MIL.M_GRAB + MIL.M_PROC, None))
       if (MilGrabBufferList[n] != MIL.M_NULL):
@@ -154,7 +116,7 @@ def SequenceExport():
          MilGrabBufferListSize += 1
       else:
          break
-   MIL.MappControl(MIL.M_DEFAULT, MIL.M_ERROR, MIL.M_PRINT_ENABLE)
+   # MIL.MappControl(MIL.M_DEFAULT, MIL.M_ERROR, MIL.M_PRINT_ENABLE)
 
    if(SaveSequenceToDisk.value):
       print(f"Saving sequence to file {filename_video}\n")
@@ -163,7 +125,7 @@ def SequenceExport():
 
    # Initialize the user's processing function data structure.
    UserHookData = HookDataStruct(MilSystem, MilDisplay, MilImageDisp,
-      MilCompressedImage, SaveSequenceToDisk, 0,0)
+                                 SaveSequenceToDisk, 0,0)
 
    ArchiveFunctionPtr = MIL.MIL_DIG_HOOK_FUNCTION_PTR(ArchiveFunction)
 
@@ -172,7 +134,7 @@ def SequenceExport():
                    ctypes.byref(UserHookData))
 
    # Print a message and wait for a key press after a minimum number of frames.
-   get_input("Press <Enter> to stop.                    \n")
+   input("Press <Enter> to stop.                    \n")
 
    # Stop the processing.
    MIL.MdigProcess(MilDigitizer, MilGrabBufferList, MilGrabBufferListSize,
@@ -184,12 +146,12 @@ def SequenceExport():
    MIL.MdigInquire(MilDigitizer, MIL.M_PROCESS_FRAME_COUNT, ctypes.byref(FrameCount));
    MIL.MdigInquire(MilDigitizer, MIL.M_PROCESS_FRAME_MISSED, ctypes.byref(FrameMissed));
 
+
    print(f"{FrameCount.value} frames saved ({FrameMissed.value} missed), at {FrameRate.value:.2f} fps\n")
-   
 
    if(SaveSequenceToDisk.value):
       MIL.MbufExportSequence(os.path.join(TEMP_PATH, filename_video), MIL.M_DEFAULT, MIL.M_NULL, MIL.M_NULL, FrameRate, MIL.M_CLOSE);
-      shutil.move(os.path.join(TEMP_PATH, filename_video), os.path.join(VIDEOS_PATH, filename_video))
+      myutils.movefile(TEMP_PATH, VIDEOS_PATH, filename_video)
 
    print(f"Image file saved to {os.path.join(IMAGES_PATH, filename_image)}")
    print(f"Video file saved to {os.path.join(VIDEOS_PATH, filename_video)}\n")
@@ -207,18 +169,5 @@ def SequenceExport():
    
    return
 
-
-@contextlib.contextmanager
-def change_directory(path):
-    """A context manager which changes the working directory to the given
-    path, and then changes it back to its previous value on exit.
-
-    """
-    prev_cwd = os.getcwd()
-    os.chdir(path)
-    yield
-    os.chdir(prev_cwd)
-
-   
 if __name__ == "__main__":
-   SequenceExport()
+   sequence_export()
