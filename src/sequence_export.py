@@ -8,15 +8,15 @@ import mil as MIL
 import contextlib
 import shutil
 import myutils
+import time
+from threading import Timer
 
 # Config and filesystem path settings
 DCF_FILENAME = "[WORKING CONFIG] MV2-D1280-640-CL-8_1280x1024_8Taps8bitCon.dcf"
-DCF_PATH = os.path.join(os.getcwd(),"configs", DCF_FILENAME)
+DCF_PATH = os.path.join("C:\\Users\\UVis\\Desktop\\graphene\\configs", DCF_FILENAME)
 TEMP_PATH = "D:\\"
-IMAGES_PATH = os.path.join(os.getcwd(), "images")
-VIDEOS_PATH = os.path.join(os.getcwd(), "videos")
-global filename_video, filename_image
-
+IMAGES_PATH = "C:\\Users\\UVis\\Desktop\\graphene\\images"
+VIDEOS_PATH = "C:\\Users\\UVis\\Desktop\\graphene\\videos"
 
 #Annotation flag. Set to M_YES to draw the frame number in the saved image. */
 FRAME_NUMBER_ANNOTATION = MIL.M_YES
@@ -27,6 +27,8 @@ SAVE_SEQUENCE_TO_DISK = MIL.M_YES
 # Number of images in the buffering grab queue.
 # Generally, increasing this number gives a better real-time grab.
 BUFFERING_SIZE_MAX = 500
+
+
 
 # User's processing function hook data structure.
 class HookDataStruct(ctypes.Structure):
@@ -77,8 +79,8 @@ def sequence_export():
    MilDisplay = MIL.MdispAlloc(MilSystem, MIL.M_DEFAULT, MIL.MIL_TEXT("M_DEFAULT"), MIL.M_DEFAULT, None)
    MilDigitizer = MIL.MdigAlloc(MilSystem, MIL.M_DEFAULT, MIL.MIL_TEXT(DCF_PATH), MIL.M_DEFAULT, None)
 
-   SizeX = MIL.MdigInquire(MilDigitizer, MIL.M_SIZE_X, None)
-   SizeY = MIL.MdigInquire(MilDigitizer, MIL.M_SIZE_Y, None)
+   SizeX = MIL.MdigInquire(MilDigitizer, MIL.M_SIZE_X, None) # Should be 1280
+   SizeY = MIL.MdigInquire(MilDigitizer, MIL.M_SIZE_Y, None) # Should be 1024
 
    MilImageDisp = MIL.MbufAlloc2d(MilSystem,SizeX,SizeY, 8 + MIL.M_UNSIGNED, MIL.M_IMAGE + MIL.M_PROC + MIL.M_DISP + MIL.M_GRAB, None)
 
@@ -94,9 +96,11 @@ def sequence_export():
    print(f"Using configuration file from:\n{DCF_PATH}\n")
    
    
-   input("Press <Enter> to start capture.\n")
+   # input("Press <Enter> to start capture.\n")
+   time_limit=float(input("Enter recording time (maximum 8.50 seconds) and start capture: "))
 
    # Generate filenames for image and video files
+   global filename_video, filename_image
    filename = myutils.generate_filename("")
    filename_video = "Video"+filename+".avi"
    filename_image = "Image"+filename+".png"
@@ -108,7 +112,7 @@ def sequence_export():
    # Allocate the grab buffers and clear them.
    MilGrabBufferList = (MIL.MIL_ID * BUFFERING_SIZE_MAX)()
    MilGrabBufferListSize = 0
-   # MIL.MappControl(MIL.M_DEFAULT, MIL.M_ERROR, MIL.M_PRINT_DISABLE)
+   MIL.MappControl(MIL.M_DEFAULT, MIL.M_ERROR, MIL.M_PRINT_DISABLE)
    for n in range(0, BUFFERING_SIZE_MAX):
       MilGrabBufferList[n] = (MIL.MbufAlloc2d(MilSystem, SizeX, SizeY, 8 + MIL.M_UNSIGNED, MIL.M_IMAGE + MIL.M_GRAB + MIL.M_PROC, None))
       if (MilGrabBufferList[n] != MIL.M_NULL):
@@ -116,7 +120,7 @@ def sequence_export():
          MilGrabBufferListSize += 1
       else:
          break
-   # MIL.MappControl(MIL.M_DEFAULT, MIL.M_ERROR, MIL.M_PRINT_ENABLE)
+   MIL.MappControl(MIL.M_DEFAULT, MIL.M_ERROR, MIL.M_PRINT_ENABLE)
 
    if(SaveSequenceToDisk.value):
       print(f"Saving sequence to file {filename_video}\n")
@@ -133,8 +137,35 @@ def sequence_export():
                    MIL.M_START, MIL.M_DEFAULT, ArchiveFunctionPtr,
                    ctypes.byref(UserHookData))
 
+   # start_time = time.time()
+   # while(True):
+   #    current_time= time.time()
+   #    elapsed_time = current_time-start_time
+   #    if(elapsed_time < 5):
+   #       continue
+   #    else:
+   #       break
+
+   prompt = "Press Enter to stop capture               \n"
+
+   # t = Timer(input_time, exit)
+   # t.start()
+   # input("Press <Enter> to stop.                    \n")
+   # # prompt = "You have %d seconds to choose the correct answer.................\n" % input_time
+   # # answer = input(prompt)
+   # t.cancel()
+
+
+   try:
+      myutils.input_with_timeout(prompt, time_limit)
+   except myutils.TimeoutExpired:
+      print(f'Time limit of {time_limit:.2f} seconds reached, saving file')
+   else:
+      pass
+
    # Print a message and wait for a key press after a minimum number of frames.
-   input("Press <Enter> to stop.                    \n")
+   # input("Press <Enter> to stop.                    \n")
+
 
    # Stop the processing.
    MIL.MdigProcess(MilDigitizer, MilGrabBufferList, MilGrabBufferListSize,

@@ -131,3 +131,4 @@ dmypy.json
 MdigProcess.py
 images
 videos
+tests/outputs
