@@ -128,7 +128,9 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-MdigProcess.py
-images
-videos
-tests/outputs
+images/*
+videos/*
+tests/outputs/*
+tests/Particle tracking/images/*
+*.mp4
+*.avi
