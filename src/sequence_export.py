@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from __future__ import print_function
 
 import sys
@@ -10,6 +9,10 @@ import shutil
 import myutils
 import time
 from threading import Timer
+import arduino_socket
+from pyduino import *
+
+print(sys.executable)
 
 # Config and filesystem path settings
 DCF_FILENAME = "[WORKING CONFIG] MV2-D1280-640-CL-8_1280x1024_8Taps8bitCon.dcf"
@@ -28,7 +31,26 @@ SAVE_SEQUENCE_TO_DISK = MIL.M_YES
 # Generally, increasing this number gives a better real-time grab.
 BUFFERING_SIZE_MAX = 500
 
+print("\nAUTOMATIC LIGHT CONTROL")
+print("-----------------------------\n")
 
+user_input = input("Do you want to enable light control?\n[y to enable, any key to skip] ")
+light_control_enabled = False
+PIN = 13
+if(user_input=="y"):
+   light_control_enabled = True
+   a = Arduino(serial_port='/COM4')
+   print("Connecting to Arudino, please wait", end="")
+
+   time.sleep(2)
+
+   a.set_pin_mode(PIN,'O')
+   # initialize the digital pin as output
+
+   time.sleep(2)
+   # allow time to make connection
+   a.digital_write(PIN,0)
+   print("\nArduino ready!")
 
 # User's processing function hook data structure.
 class HookDataStruct(ctypes.Structure):
@@ -99,6 +121,9 @@ def sequence_export():
    # input("Press <Enter> to start capture.\n")
    time_limit=float(input("Enter recording time (maximum 8.50 seconds) and start capture: "))
 
+   if(light_control_enabled == True):
+      arduino_socket.lights_on(a, PIN,0.25)
+
    # Generate filenames for image and video files
    global filename_video, filename_image
    filename = myutils.generate_filename("")
@@ -159,7 +184,7 @@ def sequence_export():
    try:
       myutils.input_with_timeout(prompt, time_limit)
    except myutils.TimeoutExpired:
-      print(f'Time limit of {time_limit:.2f} seconds reached, saving file')
+      print(f'Time limit of {time_limit:.2f} seconds reached, saving file...')
    else:
       pass
 
@@ -171,6 +196,8 @@ def sequence_export():
    MIL.MdigProcess(MilDigitizer, MilGrabBufferList, MilGrabBufferListSize,
                    MIL.M_STOP, MIL.M_DEFAULT, ArchiveFunctionPtr,
                    ctypes.byref(UserHookData))
+   if(light_control_enabled == True):
+      arduino_socket.lights_off(a, PIN,0)
 
    # Get processing statistics
    MIL.MdigInquire(MilDigitizer, MIL.M_PROCESS_FRAME_RATE, ctypes.byref(FrameRate));

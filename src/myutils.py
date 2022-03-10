@@ -5,7 +5,7 @@ import msvcrt
 
 
 def generate_filename(extension, *args):
-   time = datetime.now().strftime("%H-%M-%S_%d-%b-%Y")
+   time = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
    
    if extension != "":
       fname = f"Capture_{time}.{str(extension)}"
