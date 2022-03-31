@@ -131,6 +131,9 @@ dmypy.json
 images/*
 videos/*
 tests/outputs/*
-tests/Particle tracking/images/*
+venv
 *.mp4
 *.avi
+*.png
+
+.ipynb_checkpoints
